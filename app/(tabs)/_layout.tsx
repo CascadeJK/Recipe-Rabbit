@@ -1,12 +1,16 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
-
+import { Image } from 'react-native';
 import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import AntDesign from '@expo/vector-icons/AntDesign';
+import EvilIcons from '@expo/vector-icons/EvilIcons';
+
+
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -26,18 +30,34 @@ export default function TabLayout() {
           default: {},
         }),
       }}>
-      <Tabs.Screen
-        name="index"
+        <Tabs.Screen
+        name="profile"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <AntDesign name="user" size={30} color="grey" />
+
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="grocery"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Grocery List',
+          tabBarIcon: ({ color }) => <MaterialIcons name="local-grocery-store" size={30} color="grey" />,
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+          tabBarIcon: ({ color }) => <EvilIcons name="search" size={30} color="grey" />
+        }}
+      />
+      <Tabs.Screen
+        name="library"
+        options={{
+          title: 'Favorites',
+          tabBarIcon: ({ color }) => <AntDesign name="hearto" size={30} color="grey" />
+
         }}
       />
     </Tabs>

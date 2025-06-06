@@ -4,18 +4,37 @@
     "slug": "myProject",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/recipeRabbitLogo.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.myproject",
+      "icon": "./assets/images/recipeRabbitLogo.png"
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
+      "icon": "./assets/images/recipeRabbitLogo.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.reciperabbit.myproject",
+      "intentFilters": [
+    {
+      "action": "VIEW",
+      "data": [
+        {
+          "scheme": "com.reciperabbit.myproject"
+        }
+      ],
+      "category": [
+        "BROWSABLE",
+        "DEFAULT"
+      ]
+    }
+  ]
     },
     "web": {
       "bundler": "metro",
@@ -24,18 +43,29 @@
     },
     "plugins": [
       "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-google-signin/google-signin",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/recipeRabbitLogo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "06ab9092-000a-4ddf-92b9-678864639294"
+      }
     }
   }
 }

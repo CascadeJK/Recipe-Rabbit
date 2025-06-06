@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1003438566668",
+    "project_id": "recipe-rabbit-8a946",
+    "storage_bucket": "recipe-rabbit-8a946.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1003438566668:android:54cf40df8dc6b1c0c4ad29",
+        "android_client_info": {
+          "package_name": "com.reciperabbit.myproject"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1003438566668-h9mfqd44ppbf5rf8r9cshlt6c0srm7qg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.reciperabbit.myproject",
+            "certificate_hash": "6a6bc3e8adf2753c77eef629f4c2503cdf9c51c9"
+          }
+        },
+        {
+          "client_id": "1003438566668-mehmdtfmqdr3tk8qeflqpdd70p62ei2k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFSX5D_-kT_B-MWIba0hu15xD0GTXbvpU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1003438566668-8odihbkpqdlc05gn3u4md3bsdlf65g81.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

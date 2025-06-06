@@ -1,0 +1,611 @@
+import { StyleSheet, Image, View, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import AntDesign from '@expo/vector-icons/AntDesign';
+import { Button, Divider, Text } from '@rneui/themed';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import { FirebaseError } from 'firebase/app';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/config/firebase';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { useFavorites } from '@/context/FavoritesContext';
+import { Platform } from 'react-native';
+
+// Type guard for Firebase Error
+function isFirebaseError(error: unknown): error is FirebaseError {
+  return typeof error === 'object' && error !== null && 'code' in error;
+}
+
+// Configure WebBrowser to handle COOP issues
+WebBrowser.maybeCompleteAuthSession();
+
+// Email validation regex
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type ButtonsComponentProps = {
+  email: string;
+  password: string;
+  loading: boolean;
+  handleLogin: () => void;
+  handleRegister: () => void;
+};
+
+const Buttons: React.FunctionComponent<ButtonsComponentProps> = ({ 
+  email, 
+  password, 
+  loading, 
+  handleLogin, 
+  handleRegister 
+}) => {
+  // Validate email format
+  const isEmailValid = email ? emailRegex.test(email) : false;
+  // Check if password meets minimum requirements
+  const isPasswordValid = password ? password.length >= 6 : false;
+  
+  const isFormValid = isEmailValid && isPasswordValid;
+  
+  return (
+    <View style={styles.buttonsContainer}>
+      <Button
+        title="Register"
+        onPress={handleRegister}
+        buttonStyle={{
+          backgroundColor: '#3E1F15',
+          borderWidth: 2,
+          borderColor: 'white',
+          borderRadius: 30,
+        }}
+        containerStyle={{
+          width: 200,
+          marginHorizontal: 50,
+          marginBottom: 5,
+        }}
+        titleStyle={{ fontWeight: 'bold' }}
+      />
+      <Button
+        title="Log In"
+        loading={loading}
+        disabled={!isFormValid || loading}
+        onPress={handleLogin}
+        buttonStyle={{
+          backgroundColor: '#3E1F15',
+          borderWidth: 2,
+          borderColor: 'white',
+          borderRadius: 30,
+        }}
+        containerStyle={{
+          width: 200,
+          marginHorizontal: 50,
+          marginBottom: 5,
+        }}
+        titleStyle={{ fontWeight: 'bold' }}
+      />
+    </View>
+  );
+};
+
+const GoogleButton: React.FunctionComponent<{loading: boolean, onPress: () => void}> = ({ 
+  loading, 
+  onPress 
+}) => {
+  return (
+    <View style={styles.buttonsContainer}>      
+      <Button
+        icon={
+          <AntDesign name="google" size={30} color="black" style={{marginRight: 10}} />
+        }
+        title="Sign in with Google"
+        loading={loading}
+        onPress={onPress}
+        buttonStyle={{
+          backgroundColor: 'white',
+          borderWidth: 1,
+          borderColor: 'black',
+          borderRadius: 30,
+        }}
+        containerStyle={{
+          width: 330,
+          marginHorizontal: 50,
+          marginVertical: 5,
+        }}
+        titleStyle={{ fontWeight: 'bold', color: 'black' }}
+      />
+    </View>
+  );
+};
+
+export default function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [authChecked, setAuthChecked] = useState(false);
+  const router = useRouter();
+  const { syncFavorites, setIsLoggedIn } = useFavorites();
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+  clientId: Platform.select({
+    ios: '1003438566668-8odihbkpqdlc05gn3u4md3bsdlf65g81.apps.googleusercontent.com',
+    android: '1003438566668-h9mfqd44ppbf5rf8r9cshlt6c0srm7qg.apps.googleusercontent.com',
+    web: '1003438566668-mehmdtfmqdr3tk8qeflqpdd70p62ei2k.apps.googleusercontent.com',
+    default: '1003438566668-mehmdtfmqdr3tk8qeflqpdd70p62ei2k.apps.googleusercontent.com'
+  }),
+  scopes: ['profile', 'email'],
+  responseType: 'id_token',
+  // Remove additionalParameters - this property doesn't exist
+  // Keep only extraParams for additional OAuth parameters
+  extraParams: {
+    access_type: 'offline',
+  },
+});
+
+  // Debug useEffect to check if request is being created
+  useEffect(() => {
+    console.log('Google Auth Request created:', !!request);
+    console.log('Request details:', request);
+  }, [request]);
+
+  // Check for auth state changes
+  useEffect(() => {
+    if (!auth) {
+      console.error('Firebase auth is not initialized');
+      setAuthChecked(true);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthChecked(true);
+      
+      if (user) {
+        setIsLoggedIn(true);
+        
+        syncFavorites().then(() => {
+          router.replace('/(tabs)/search');
+        }).catch(error => {
+          console.error('Error syncing favorites during auto-login:', error);
+          router.replace('/(tabs)/search');
+        });
+      } else {
+        console.log('No user is signed in');
+        setIsLoggedIn(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Updated Google Sign-in response handler with manual ID token extraction
+  useEffect(() => {
+    console.log('Google response changed:', response);
+    
+    if (response?.type === 'success') {
+      console.log('Google sign-in response success:', response);
+      
+      // Manual ID token extraction - Try multiple methods
+      let idToken = null;
+      
+      // Method 1: Check authentication object first (standard way)
+      if (response.authentication?.idToken) {
+        idToken = response.authentication.idToken;
+        console.log('ID token found in authentication object');
+      }
+      // Method 2: Extract from URL fragment (fallback for COOP issues)
+      else if (response.url) {
+        console.log('Extracting ID token from URL:', response.url);
+        
+        // Try URL fragment first (after #)
+        const urlFragment = response.url.split('#')[1];
+        if (urlFragment) {
+          const fragmentParams = new URLSearchParams(urlFragment);
+          idToken = fragmentParams.get('id_token');
+          console.log('ID token extracted from URL fragment:', !!idToken);
+        }
+        
+        // If not in fragment, try query parameters (after ?)
+        if (!idToken) {
+          const urlQuery = response.url.split('?')[1];
+          if (urlQuery) {
+            const queryParams = new URLSearchParams(urlQuery);
+            idToken = queryParams.get('id_token');
+            console.log('ID token extracted from URL query:', !!idToken);
+          }
+        }
+      }
+      // Method 3: Check params object directly
+      else if (response.params?.id_token) {
+        idToken = response.params.id_token;
+        console.log('ID token found in params object');
+      }
+      
+      if (idToken) {
+        console.log('Processing ID token...');
+        handleGoogleCredential({ idToken });
+      } else {
+        console.error('No ID token found in response');
+        console.log('Full response object:', response);
+        console.log('Response URL:', response.url);
+        console.log('Response params:', response.params);
+        console.log('Response authentication:', response.authentication);
+        
+        Alert.alert(
+          'Google Sign-In Failed', 
+          'Authentication token not received. Please try again or use email/password login.'
+        );
+        setGoogleLoading(false);
+      }
+    } else if (response?.type === 'error') {
+      console.error('Google sign-in response error:', response.error);
+      setGoogleLoading(false);
+      
+      const errorMessage = response.error?.message || '';
+      if (errorMessage.includes('Cross-Origin-Opener-Policy') || 
+          errorMessage.includes('window.close') ||
+          errorMessage.includes('popup')) {
+        Alert.alert(
+          'Sign-in Method Not Available',
+          'Google sign-in popup is blocked by your browser. Please use email/password login or try a different browser.'
+        );
+      } else {
+        Alert.alert('Google Sign-In Failed', errorMessage || 'An error occurred during Google sign-in');
+      }
+    } else if (response?.type === 'cancel') {
+      console.log('Google sign-in was cancelled by user');
+      setGoogleLoading(false);
+    } else if (response) {
+      console.log('Unknown Google response type:', response.type);
+      setGoogleLoading(false);
+    }
+  }, [response]);
+
+  // Updated Google credential handler
+  const handleGoogleCredential = async (authentication: { idToken: string }) => {
+    console.log('Processing Google credential...');
+    
+    if (!authentication?.idToken) {
+      console.error('No valid authentication token received:', authentication);
+      Alert.alert('Google Sign-In Failed', 'Invalid authentication token');
+      setGoogleLoading(false);
+      return;
+    }
+    
+    try {
+      console.log('Creating Google credential...');
+      const credential = GoogleAuthProvider.credential(authentication.idToken);
+      
+      console.log('Signing in with Google credential...');
+      const userCredential = await signInWithCredential(auth, credential);
+      console.log('User signed in with Google:', userCredential.user.uid);
+      
+      setIsLoggedIn(true);
+      
+      console.log('Syncing favorites...');
+      await syncFavorites().catch(error => {
+        console.error('Error syncing favorites during Google login:', error);
+      });
+      
+      console.log('Navigating to search page...');
+      router.replace('/(tabs)/search');
+    } catch (error) {
+      console.error('Google credential sign-in error:', error);
+      if (isFirebaseError(error)) {
+        Alert.alert('Google Sign-In Failed', error.message || 'Failed to sign in with Google');
+      } else {
+        Alert.alert('Google Sign-In Failed', 'An unknown error occurred');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // Validate email
+  const validateEmail = (text: string) => {
+    setEmail(text);
+    if (text && !emailRegex.test(text)) {
+      setEmailError('Please enter a valid email address');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  // Validate password
+  const validatePassword = (text: string) => {
+    setPassword(text);
+    if (text && text.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+    } else {
+      setPasswordError('');
+    }
+  };
+
+  // Handle email/password login with improved error handling
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+
+    if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (!auth) {
+      console.error('Firebase auth is not initialized');
+      Alert.alert('Error', 'Authentication service is not available');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      console.log('User logged in:', userCredential.user.uid);
+      
+      setIsLoggedIn(true);
+      
+      await syncFavorites().catch(error => {
+        console.error('Error syncing favorites during login:', error);
+      });
+      
+      router.replace('/(tabs)/search');
+    } catch (error) {
+      console.error('Login error:', error);
+      
+      if (isFirebaseError(error)) {
+        switch (error.code) {
+          case 'auth/invalid-credential':
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+            Alert.alert('Login Failed', 'Invalid email or password. Please try again.');
+            break;
+          case 'auth/too-many-requests':
+            Alert.alert('Login Failed', 'Too many failed login attempts. Please try again later or reset your password.');
+            break;
+          case 'auth/user-disabled':
+            Alert.alert('Login Failed', 'This account has been disabled. Please contact support.');
+            break;
+          case 'auth/network-request-failed':
+            Alert.alert('Network Error', 'Please check your internet connection and try again.');
+            break;
+          default:
+            Alert.alert('Login Failed', error.message || 'Failed to log in. Please try again.');
+        }
+      } else {
+        Alert.alert('Login Failed', 'An unknown error occurred. Please try again later.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle registration navigation
+  const handleRegister = () => {
+    router.push('./register');
+  };
+
+  // Enhanced Google Sign-In with better debugging and error handling
+  const handleGoogleSignIn = async () => {
+    console.log('Google Sign-In button pressed');
+    console.log('Request object:', request);
+    console.log('Platform:', Platform.OS);
+    
+    if (!request) {
+      console.error('Google Auth request is null or undefined');
+      Alert.alert(
+        'Configuration Error', 
+        'Google Sign-In is not properly configured. Please check your client IDs and try again.'
+      );
+      return;
+    }
+    
+    try {
+      setGoogleLoading(true);
+      console.log('Starting Google sign-in flow...');
+      
+      // Add a small delay to ensure loading state is visible
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const result = await promptAsync();
+      console.log('Google sign-in result:', result);
+      
+      if (result.type === 'success') {
+        console.log('Google sign-in successful');
+        // The useEffect will handle the success case with manual ID token extraction
+      } else if (result.type === 'cancel') {
+        console.log('Google sign-in cancelled by user');
+        Alert.alert('Sign-In Cancelled', 'Google sign-in was cancelled.');
+        setGoogleLoading(false);
+      } else if (result.type === 'error') {
+        console.error('Google sign-in error:', result.error);
+        Alert.alert('Sign-In Error', result.error?.message || 'An error occurred during sign-in.');
+        setGoogleLoading(false);
+      } else {
+        console.log('Google sign-in failed with type:', result.type);
+        Alert.alert('Sign-In Failed', 'Google sign-in failed. Please try again.');
+        setGoogleLoading(false);
+      }
+    } catch (error) {
+      console.error('Google sign-in prompt error:', error);
+      
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('cross-origin-opener-policy') || 
+            errorMessage.includes('popup') ||
+            errorMessage.includes('window.close') ||
+            errorMessage.includes('blocked')) {
+          Alert.alert(
+            'Browser Security Restriction',
+            'Your browser\'s security settings prevent Google sign-in. Please use email/password login or try a different browser.'
+          );
+        } else {
+          Alert.alert('Sign-In Error', `Failed to start Google sign-in: ${error.message}`);
+        }
+      } else {
+        Alert.alert('Sign-In Error', 'An unknown error occurred during Google sign-in.');
+      }
+      
+      setGoogleLoading(false);
+    }
+  };
+
+  // Handle forgot password
+  const handleForgotPassword = async () => {
+    if (email && emailRegex.test(email)) {
+      try {
+        setLoading(true);
+        await sendPasswordResetEmail(auth, email.trim());
+        Alert.alert(
+          'Password Reset Email Sent',
+          'Check your email for instructions to reset your password.'
+        );
+      } catch (error) {
+        console.error('Password reset error:', error);
+        if (isFirebaseError(error)) {
+          if (error.code === 'auth/user-not-found') {
+            Alert.alert('Password Reset Failed', 'No account exists with this email address.');
+          } else {
+            Alert.alert(
+              'Password Reset Failed',
+              error.message || 'Failed to send password reset email. Please try again.'
+            );
+          }
+        } else {
+          Alert.alert('Password Reset Failed', 'An unknown error occurred.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      router.push('./forgot-password');
+    }
+  };
+
+  return (
+    <View style={styles.screen}>
+      <ScrollView>
+        <ThemedView>
+          <ThemedView style={styles.inputContainer}>
+            <Image
+              source={require('@/assets/images/recipeRabbitLogo.png')}
+              style={{ width: 150, height: 150, marginTop: 80 }}
+            />
+            <ThemedText type="italicTitle">Recipe Rabbit</ThemedText>
+          </ThemedView>
+
+          <ThemedView style={styles.container}>
+            <ThemedText type="defaultSemiBold">Email</ThemedText>
+          </ThemedView>
+
+          <ThemedView style={styles.inputContainer}>
+            <TextInput
+              style={[styles.input, emailError ? styles.inputError : null]}
+              placeholder="Email"
+              value={email}
+              onChangeText={validateEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+          </ThemedView>
+          
+          <ThemedView style={styles.container}>
+            <ThemedText type="defaultSemiBold">Password</ThemedText>
+          </ThemedView>
+
+          <ThemedView style={styles.inputContainer}>
+            <TextInput
+              style={[styles.input, passwordError ? styles.inputError : null]}
+              placeholder="Password"
+              value={password}
+              onChangeText={validatePassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+            />
+            {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+          </ThemedView>
+
+          <ThemedView style={styles.inputContainer}>
+            <ThemedText 
+              type="link" 
+              onPress={handleForgotPassword}
+            >
+              Forgot Password?
+            </ThemedText>
+          </ThemedView>
+          
+          <Buttons 
+            email={email}
+            password={password}
+            loading={loading}
+            handleLogin={handleLogin}
+            handleRegister={handleRegister}
+          />
+          
+          <Divider width={1} color={"black"}/>
+          
+          <ThemedView style={styles.inputContainer}>
+            <ThemedText type="default">Or</ThemedText>
+          </ThemedView>
+          
+          <GoogleButton 
+            loading={googleLoading}
+            onPress={handleGoogleSignIn}
+          />
+        </ThemedView>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFCE0',
+  },
+  input: {
+    height: 40,
+    borderColor: 'black',
+    borderWidth: 1,
+    borderRadius: 20,
+    width: 330,
+    backgroundColor: 'white',
+    paddingHorizontal: 10,
+  },
+  inputError: {
+    borderColor: 'red',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 12,
+    alignSelf: 'flex-start',
+    marginLeft: 15,
+  },
+  inputContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 15,
+  },
+  buttonsContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginVertical: 20,
+  },
+  container: {
+    marginTop: 20,
+    marginLeft: 50,
+    marginBottom: 10,
+  },
+});
