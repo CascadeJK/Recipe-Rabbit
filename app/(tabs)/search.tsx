@@ -275,13 +275,11 @@ const fetchRecipes = async (append = false, dietFilterParam?: string | null, max
   }
 };
 
-// Update your handleApplyFilters function
 const handleApplyFilters = () => {
   const newAppliedDietFilter = dietFilter;
   const newAppliedMaxCookingTime = maxCookingTime;
   const newAppliedExcludedIngredients = excludedIngredients;
   
-  // Update applied filters
   setAppliedDietFilter(newAppliedDietFilter);
   setAppliedMaxCookingTime(newAppliedMaxCookingTime);
   setAppliedExcludedIngredients(newAppliedExcludedIngredients);
@@ -294,7 +292,6 @@ const handleApplyFilters = () => {
   }
 };
 
-// Update your handleClearFilters function
 const handleClearFilters = () => {
   setDietFilter('');
   setMaxCookingTime('');
