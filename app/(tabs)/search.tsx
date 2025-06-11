@@ -34,6 +34,12 @@ export default function SearchScreen({ navigation }: { navigation: any }) {
   const [hasSearched, setHasSearched] = useState(false);
   const [maxCookingTime, setMaxCookingTime] = useState('');
   const [excludedIngredients, setExcludedIngredients] = useState('');
+  
+  // Add state to track applied filters (separate from the filter inputs)
+  const [appliedDietFilter, setAppliedDietFilter] = useState('');
+  const [appliedMaxCookingTime, setAppliedMaxCookingTime] = useState('');
+  const [appliedExcludedIngredients, setAppliedExcludedIngredients] = useState('');
+  
   const { addFavorite, removeFavorite, isFavorited, isLoggedIn } = useFavorites();
   const { addGroceryItem, removeGroceryItemByName, groceryItems } = useGrocery();
   const [isExploreMode, setIsExploreMode] = useState(false);
@@ -198,76 +204,119 @@ ${cleanInstructions(selectedRecipe.instructions || '')}
       item.name.toLowerCase().trim() === ingredientName.toLowerCase().trim() && !item.checked
     );
   };
+
+
+const fetchRecipes = async (append = false, dietFilterParam?: string | null, maxCookingTimeParam?: string | null, excludedIngredientsParam?: string | null) => {
+  Keyboard.dismiss();
   
-  const fetchRecipes = async (append = false) => {
-    if (!ingredients.trim()) {
-      Alert.alert('No Ingredients Added', 'Please enter at least one ingredient to search.');
-      return;
+  setLoading(true);
+  setNoResults(false);
+  setIsExploreMode(false);
+  
+  try {
+    const nextOffset = append ? offset + 10 : 0;
+
+    const queryParams = new URLSearchParams({
+      number: '10',
+      offset: nextOffset.toString(),
+      apiKey: '1f0d82fedefb4978912be65634536f13',
+    });
+
+    if (ingredients.trim()) {
+      queryParams.append('includeIngredients', ingredients);
     }
     
-    Keyboard.dismiss();
+    // Use passed parameters if provided, otherwise use applied state
+    const dietToUse = dietFilterParam !== undefined ? dietFilterParam : appliedDietFilter;
+    const maxTimeToUse = maxCookingTimeParam !== undefined ? maxCookingTimeParam : appliedMaxCookingTime;
+    const excludedToUse = excludedIngredientsParam !== undefined ? excludedIngredientsParam : appliedExcludedIngredients;
     
-    setLoading(true);
-    setNoResults(false);
-    setIsExploreMode(false);
-    
-    try {
-      const nextOffset = append ? offset + 10 : 0;
-
-      const queryParams = new URLSearchParams({
-        includeIngredients: ingredients,
-        number: '10',
-        offset: nextOffset.toString(),
-        apiKey: '1f0d82fedefb4978912be65634536f13',
-      });
-  
-      if (dietFilter) {
-        queryParams.append('diet', dietFilter);
-      }
-
-      if (excludedIngredients.trim()) {
-        const cleaned = excludedIngredients
-          .split(',')
-          .map((item) => item.trim().toLowerCase())
-          .join(',');
-        queryParams.append('excludeIngredients', cleaned);
-      }
-
-      if (maxCookingTime) {
-        queryParams.append('maxReadyTime', maxCookingTime);
-      }
-  
-      const response = await fetch(
-        `https://api.spoonacular.com/recipes/complexSearch?${queryParams.toString()}&addRecipeInformation=true`
-      );
-  
-      const data = await response.json();
-  
-      const results = data.results || [];
-  
-      if (append) {
-        setRecipes((prev) => [...prev, ...results]);
-      } else {
-        setRecipes(results);
-        setHasSearched(true);
-        
-        if (results.length === 0) {
-          setNoResults(true);
-        }
-      }
-  
-      setOffset(nextOffset);
-      setHasMore(results.length === 10);
-    } catch (error) {
-      console.error('Failed to fetch recipes:', error);
-      Alert.alert('Error', 'Failed to fetch recipes. Please try again.');
-    } finally {
-      setLoading(false);
+    if (dietToUse) {
+      queryParams.append('diet', dietToUse);
     }
-  };
+
+    if (excludedToUse && excludedToUse.trim()) {
+      const cleaned = excludedToUse
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .join(',');
+      queryParams.append('excludeIngredients', cleaned);
+    }
+
+    if (maxTimeToUse) {
+      queryParams.append('maxReadyTime', maxTimeToUse);
+    }
+
+    const response = await fetch(
+      `https://api.spoonacular.com/recipes/complexSearch?${queryParams.toString()}&addRecipeInformation=true`
+    );
+
+    const data = await response.json();
+    const results = data.results || [];
+
+    if (append) {
+      setRecipes((prev) => [...prev, ...results]);
+    } else {
+      setRecipes(results);
+      setHasSearched(true);
+      
+      if (results.length === 0) {
+        setNoResults(true);
+      }
+    }
+
+    setOffset(nextOffset);
+    setHasMore(results.length === 10);
+  } catch (error) {
+    console.error('Failed to fetch recipes:', error);
+    Alert.alert('Error', 'Failed to fetch recipes. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Update your handleApplyFilters function
+const handleApplyFilters = () => {
+  const newAppliedDietFilter = dietFilter;
+  const newAppliedMaxCookingTime = maxCookingTime;
+  const newAppliedExcludedIngredients = excludedIngredients;
+  
+  // Update applied filters
+  setAppliedDietFilter(newAppliedDietFilter);
+  setAppliedMaxCookingTime(newAppliedMaxCookingTime);
+  setAppliedExcludedIngredients(newAppliedExcludedIngredients);
+  setIsFilterVisible(false);
+  
+  // Auto-search if ingredients have been entered or if there's been a previous search
+  if (ingredients.trim() || hasSearched) {
+    // Call the unified fetchRecipes function with the new filter values
+    fetchRecipes(false, newAppliedDietFilter, newAppliedMaxCookingTime, newAppliedExcludedIngredients);
+  }
+};
+
+// Update your handleClearFilters function
+const handleClearFilters = () => {
+  setDietFilter('');
+  setMaxCookingTime('');
+  setExcludedIngredients('');
+  setAppliedDietFilter('');
+  setAppliedMaxCookingTime('');
+  setAppliedExcludedIngredients('');
+   setIsFilterVisible(false);
+  
+  // Auto-search if ingredients have been entered or if there's been a previous search
+  if (ingredients.trim() || hasSearched) {
+    // Call the unified fetchRecipes function with null values to clear filters
+    fetchRecipes(false, null, null, null);
+  }
+};
   
   const handleExplore = async () => {
-    setDietFilter('');
+    // Clear applied filters for explore mode
+    setAppliedDietFilter('');
+    setAppliedMaxCookingTime('');
+    setAppliedExcludedIngredients('');
+    
     setLoading(true);
     setNoResults(false);
     setIsExploreMode(true);
@@ -313,6 +362,11 @@ ${cleanInstructions(selectedRecipe.instructions || '')}
     setSelectedRecipe(null);
   };
 
+  // Helper function to check if any filters are applied
+  const hasAppliedFilters = () => {
+    return appliedDietFilter || appliedMaxCookingTime || appliedExcludedIngredients;
+  };
+
   const renderWelcomeMessage = () => (
     <View style={styles.welcomeContainer}>
       <MaterialIcons name="restaurant-menu" size={80} color="#3E1F15" />
@@ -355,12 +409,24 @@ ${cleanInstructions(selectedRecipe.instructions || '')}
         <View style={styles.searchWrapper}>
           <View style={styles.filterButtonContainer}>
             <TouchableOpacity 
-              style={styles.filterButton} 
+              style={[
+                styles.filterButton,
+                hasAppliedFilters() && styles.filterButtonActive
+              ]} 
               onPress={() => setIsFilterVisible(!isFilterVisible)}
             >
-              <Feather name="sliders" size={22} color="black" />
+              <Feather 
+                name="sliders" 
+                size={22} 
+                color={hasAppliedFilters() ? "white" : "black"} 
+              />
             </TouchableOpacity>
-            <Text style={styles.optionsText}>Filter</Text>
+            <Text style={[
+              styles.optionsText,
+              hasAppliedFilters() && styles.optionsTextActive
+            ]}>
+              Filter
+            </Text>
           </View>
 
           <TextInput
@@ -555,7 +621,11 @@ ${cleanInstructions(selectedRecipe.instructions || '')}
                 <ThemedText>Cancel</ThemedText>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.applyButton} onPress={() => {setIsFilterVisible(false); fetchRecipes(false);}}>
+              <TouchableOpacity style={styles.clearButton} onPress={handleClearFilters}>
+                <ThemedText>Clear All</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.applyButton} onPress={handleApplyFilters}>
                 <ThemedText style={styles.applyText}>Apply</ThemedText>
               </TouchableOpacity>
             </View>
@@ -706,11 +776,20 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     marginBottom: -3,
+    padding: 3,
+    borderRadius: 12,
+  },
+  filterButtonActive: {
+    backgroundColor: '#3E1F15',
   },
   optionsText: {
     fontSize: 12,
     color: 'black',
     fontWeight: '500',
+  },
+  optionsTextActive: {
+    color: '#3E1F15',
+    fontWeight: 'bold',
   },
   pickerWrapper: {
     width: '90%',
@@ -754,34 +833,88 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   buttonContainer: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 8,
+  marginTop: 20,
+  paddingHorizontal: 10,
+  width: '100%',
+},
+
+cancelButton: {
+  backgroundColor: 'white',
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  borderRadius: 25,
+  borderWidth: 2,
+  borderColor: '#3E1F15',
+  flex: 1,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 2,
   },
-  cancelButton: {
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'black',
-    width:140,
-    flexDirection: 'column',
-    alignItems: 'center',
+  shadowOpacity: 0.1,
+  shadowRadius: 3,
+  elevation: 3,
+},
+
+cancelButtonText: {
+  color: '#3E1F15',
+  fontWeight: '600',
+  fontSize: 14,
+},
+
+clearButton: {
+  backgroundColor: '#FF6B6B',
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  borderRadius: 25,
+  borderWidth: 2,
+  borderColor: '#FF4444',
+  flex: 1,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 2,
   },
-  applyButton: {
-    backgroundColor: '#3E1F15',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    width:140,
-    flexDirection: 'column',
-    alignItems: 'center',
+  shadowOpacity: 0.1,
+  shadowRadius: 3,
+  elevation: 3,
+},
+
+clearButtonText: {
+  color: 'white',
+  fontWeight: '600',
+  fontSize: 14,
+},
+applyButton: {
+  backgroundColor: '#3E1F15',
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  borderRadius: 25,
+  borderWidth: 2,
+  borderColor: '#3E1F15',
+  flex: 1,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 2,
   },
-  applyText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+  elevation: 4,
+},
+
+applyText: {
+  color: 'white',
+  fontWeight: 'bold',
+  fontSize: 14,
+},
   /* --- End of Filter Collapsible Section --- */
   recipeItem: {
     flexDirection: 'row',

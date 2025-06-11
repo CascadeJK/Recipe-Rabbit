@@ -49,7 +49,7 @@ export default function TabLayout() {
         name="search"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color }) => <EvilIcons name="search" size={30} color="grey" />
+          tabBarIcon: ({ color }) => <AntDesign name="search1" size={30} color="grey" />
         }}
       />
       <Tabs.Screen
